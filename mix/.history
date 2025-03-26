@@ -120,3 +120,7 @@ date,id,ccmode,lbmode,cwh_tx_expiry_time,cwh_extra_reply_deadline,cwh_path_pause
 ./waf --run 'scratch/network-load-balance /root/workspace/ns-allinone-3.19/ns-3.19/mix/output/398534747/config.txt' > /root/workspace/ns-allinone-3.19/ns-3.19/mix/output/398534747/config.log 2>&1
 ./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /root/workspace/ns-allinone-3.19/ns-3.19/mix/output/398534747/config.txt'
 
+03/26/25,83345992,1,11,1000,4,16,64,400,1,0,0,0,leaf_spine_128_100G_OS2,100,webserver,50,0.01
+./waf --run 'scratch/network-load-balance /root/workspace/ns-allinone-3.19/ns-3.19/mix/output/83345992/config.txt' > /root/workspace/ns-allinone-3.19/ns-3.19/mix/output/83345992/config.log 2>&1
+./waf --run 'scratch/network-load-balance' --command-template='gdb --args %s /root/workspace/ns-allinone-3.19/ns-3.19/mix/output/83345992/config.txt'
+

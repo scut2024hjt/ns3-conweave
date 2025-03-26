@@ -5,7 +5,7 @@ build/*
 .vscode/*
 
 analyze/raw_basic/*
-mix/debug/*
+mix/*
 mix/output/*
 mix/*_flow.txt
 config/*_flow.txt

@@ -385,7 +385,9 @@ namespace ns3 {
 			}
 		}		
 		*/ 
-		return pathSet[0];
+	
+		// return pathSet[0];
+
 		// std::srand(Simulator::Now().GetInteger());
 		// return pathSet[rand() % pathSet.size()];
 
