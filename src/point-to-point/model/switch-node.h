@@ -56,6 +56,11 @@ class SwitchNode : public Node {
     // ConWeave (lb_mode = 9)
     uint32_t DoLbConWeave(Ptr<const Packet> p, const CustomHeader &ch,
                            const std::vector<int> &nexthops);  // dummy
+    // Proteus (lb_mode = 11)
+    uint32_t DoLbProteus(Ptr<const Packet> p, const CustomHeader &ch,
+                           const std::vector<int> &nexthops);  // dummy
+    
+    bool* GetInterfacePauseStatus(uint32_t interface);
 
    public:
     // Ptr<BroadcomNode> m_broadcom;

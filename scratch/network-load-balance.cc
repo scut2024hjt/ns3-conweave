@@ -76,6 +76,11 @@ Time conweave_extraVOQFlushTime = MicroSeconds(32);       // extra for uncertain
 Time conweave_defaultVOQWaitingTime = MicroSeconds(500);  // default flush timer if no history
 bool conweave_pathAwareRerouting = true;
 
+//Proteus params
+Time proteus_probeInterval = Time(MicroSeconds(100));
+Time proteus_dreTime = Time(MicroSeconds(200));
+Time proteus_onewayRttLow = NanoSeconds(4160*1.3);
+
 /*------------------------ simulation variables -----------------------------*/
 uint64_t one_hop_delay = 1000;  // nanoseconds
 uint32_t cc_mode = 1;           // mode for congestion control, 1: DCQCN
@@ -214,7 +219,7 @@ void ReadFlowInput() {
  */
 void ScheduleFlowInputs(FILE *infile) {
     NS_LOG_DEBUG("ScheduleFlowInputs at " << Simulator::Now());
-    while (flow_input.idx < flow_num && Seconds(flow_input.start_time) == Simulator::Now()) {
+    while (flow_input.idx < flow_num && Seconds(flow_input.start_time) == Simulator::Now()) {   // 这里用==来判断时间是否(为何)可行
         uint32_t pg, src, dst, sport, dport, maxPacketCount, target_len;
         pg = flow_input.pg;
         src = flow_input.src;
@@ -487,10 +492,13 @@ void qp_finish(FILE *fout, Ptr<RdmaQueuePair> q) {
             standalone_fct);
 
     // for debugging
-    NS_LOG_DEBUG("%u %u %u %u %lu %lu %lu %lu\n" %
-                 (Settings::ip_to_node_id(q->sip), Settings::ip_to_node_id(q->dip), q->sport,
-                  q->dport, q->m_size, q->startTime.GetTimeStep(),
-                  (Simulator::Now() - q->startTime).GetTimeStep(), standalone_fct));
+    // NS_LOG_DEBUG("%u %u %u %u %lu %lu %lu %lu\n" <<
+    //              (Settings::ip_to_node_id(q->sip), Settings::ip_to_node_id(q->dip), q->sport,
+    //               q->dport, q->m_size, q->startTime.GetTimeStep(),
+    //               (Simulator::Now() - q->startTime).GetTimeStep(), standalone_fct));
+    NS_LOG_DEBUG("sid=" << Settings::ip_to_node_id(q->sip) << ", did=" << Settings::ip_to_node_id(q->dip) << ", sport=" << q->sport
+                << ", dport="<< q->dport << ", m_size=" << q->m_size << ", start_time=" << q->startTime.GetTimeStep()
+                << ", fct=" << (Simulator::Now() - q->startTime).GetTimeStep() << ", standalone_fct=" << standalone_fct);
     Settings::cnt_finished_flows++;
     fflush(fout);
 }
@@ -1264,12 +1272,15 @@ int main(int argc, char *argv[]) {
                 .GetTimeStep();
         nbr2if[dnode][snode].bw = DynamicCast<QbbNetDevice>(d.Get(1))->GetDataRate().GetBitRate();
 
+        // std::cout << "link: " << src << "->" << dst << " interface: " << "id: " << nbr2if[snode][dnode].idx <<  " src: " << nbr2if[snode][dnode].idx << " dst: " << nbr2if[dnode][snode].idx << endl;
+
         // This is just to set up the connectivity between nodes. The IP addresses are useless
         char ipstring[16];
         Ipv4Address x;
         sprintf(ipstring, "10.%d.%d.0", i / 254 + 1, i % 254 + 1);
         ipv4.SetBase(ipstring, "255.255.255.0");
         ipv4.Assign(d);
+        // std::cout << "ipstring: " << ipstring << std::endl;
 
         // setup PFC trace
         DynamicCast<QbbNetDevice>(d.Get(0))->TraceConnectWithoutContext(
@@ -1292,6 +1303,7 @@ int main(int argc, char *argv[]) {
         }
         Settings::hostId2IpMap[i] = serverAddress[i].Get();
         Settings::hostIp2IdMap[serverAddress[i].Get()] = i;
+        // std::cout << "IP Address before SetBase: " << serverAddress[i].Get() << std::endl;
     }
 
     // config switch
@@ -1323,7 +1335,7 @@ int main(int argc, char *argv[]) {
             sw->m_mmu->ConfigBufferSize(buffer_size * 1024 *
                                         1024);  // default 0, specify in run.py!!
             sw->m_mmu->node_id = sw->GetId();
-            NS_LOG_INFO("Node %u : Broadcom switch (%u ports / %gMB MMU)\n" %
+            NS_LOG_INFO("Node %u : Broadcom switch (%u ports / %gMB MMU)\n" <<
                         (i, sw->GetNDevices() - 1, sw->m_mmu->GetMmuBufferBytes() / 1000000.));
         }
     }
@@ -1365,6 +1377,7 @@ int main(int argc, char *argv[]) {
     // manually type BDP
     std::map<std::string, uint32_t> topo2bdpMap;
     topo2bdpMap[std::string("leaf_spine_128_100G_OS2")] = 104000;  // RTT=8320
+    topo2bdpMap[std::string("leaf_spine_128_40G_OS2")] = 44000;  // RTT=8320
     topo2bdpMap[std::string("fat_k8_100G_OS2")] = 156000;      // RTT=12480 --> all 100G links
 
     // topology_file
@@ -1497,7 +1510,7 @@ int main(int argc, char *argv[]) {
     }
 
     /* config load balancer's switches using ToR-to-ToR routing */
-    if (lb_mode == 3 || lb_mode == 6 || lb_mode == 9) {  // Conga, Letflow, Conweave
+    if (lb_mode == 3 || lb_mode == 6 || lb_mode == 9 || lb_mode == 11) {  // Conga, Letflow, Conweave, Proteus
         NS_LOG_INFO("Configuring Load Balancer's Switches");
         for (auto &pair : link_pairs) {
             Ptr<Node> probably_host = n.Get(pair.first);
@@ -1539,7 +1552,7 @@ int main(int argc, char *argv[]) {
                                 .m_congaFromLeafTable[swDstId];  // dynamically will be added in
                                                                  // conga
                             swSrc->m_mmu->m_congaRouting.m_congaToLeafTable[swDstId];
-                        }
+                        }                       
 
                         // construct paths
                         uint32_t pathId;
@@ -1570,6 +1583,12 @@ int main(int argc, char *argv[]) {
                                         .insert(pathId);
                                     swSrc->m_mmu->m_conweaveRouting.m_rxToRId2BaseRTT[swDstId] =
                                         one_hop_delay * 4;
+                                }
+                                if (lb_mode == 11) {
+                                    swSrc->m_mmu->m_proteusRouting.m_proteusRoutingTable[swDstId]
+                                        .insert(pathId);
+                                    struct proteusPathInfo initPathInfo;
+                                    swSrc->m_mmu->m_proteusRouting.m_proteusPathInfoTable[swDstId][pathId] = initPathInfo;
                                 }
                                 continue;
                             }
@@ -1602,6 +1621,12 @@ int main(int argc, char *argv[]) {
                                             .insert(pathId);
                                         swSrc->m_mmu->m_conweaveRouting.m_rxToRId2BaseRTT[swDstId] =
                                             one_hop_delay * 6;
+                                    }
+                                    if (lb_mode == 11) {
+                                        swSrc->m_mmu->m_proteusRouting.m_proteusRoutingTable[swDstId]
+                                            .insert(pathId);
+                                        struct proteusPathInfo initPathInfo;
+                                        swSrc->m_mmu->m_proteusRouting.m_proteusPathInfoTable[swDstId][pathId] = initPathInfo;
                                     }
                                     continue;
                                 }
@@ -1639,6 +1664,12 @@ int main(int argc, char *argv[]) {
                                             swSrc->m_mmu->m_conweaveRouting
                                                 .m_rxToRId2BaseRTT[swDstId] = one_hop_delay * 8;
                                         }
+                                        if (lb_mode == 11) {
+                                            swSrc->m_mmu->m_proteusRouting.m_proteusRoutingTable[swDstId]
+                                                .insert(pathId);
+                                            struct proteusPathInfo initPathInfo;
+                                            swSrc->m_mmu->m_proteusRouting.m_proteusPathInfoTable[swDstId][pathId] = initPathInfo;
+                                        }
                                         continue;
                                     } else {
                                         printf("Too large topology?\n");
@@ -1652,7 +1683,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        // m_outPort2BitRateMap - only for Conga
+        // m_outPort2BitRateMap - only for Conga && proteus
         for (auto i = nextHop.begin(); i != nextHop.end(); i++) {  // every node
             if (i->first->GetNodeType() == 1) {                    // switch
                 Ptr<Node> node = i->first;
@@ -1669,6 +1700,7 @@ int main(int argc, char *argv[]) {
                         uint32_t outPort = nbr2if[node][next].idx;
                         uint64_t bw = nbr2if[node][next].bw;
                         sw->m_mmu->m_congaRouting.SetLinkCapacity(outPort, bw);
+                        sw->m_mmu->m_proteusRouting.SetLinkCapacity(outPort, bw);
                         // printf("Node: %d, interface: %d, bw: %lu\n", swId, outPort, bw);
                     }
                 }
@@ -1680,7 +1712,7 @@ int main(int argc, char *argv[]) {
             if (i->first->GetNodeType() == 1) {
                 Ptr<Node> node = i->first;
                 Ptr<SwitchNode> sw = DynamicCast<SwitchNode>(node);  // switch
-                NS_LOG_INFO("Switch Info - ID:%u, ToR:%d\n" % (sw->GetId(), sw->m_isToR));
+                NS_LOG_INFO("Switch Info - ID:%u, ToR:%d\n" << (sw->GetId(), sw->m_isToR));
                 if (lb_mode == 3) {
                     sw->m_mmu->m_congaRouting.SetConstants(conga_dreTime, conga_agingTime,
                                                            conga_flowletTimeout, conga_quantizeBit,
@@ -1698,6 +1730,10 @@ int main(int argc, char *argv[]) {
                         conweave_txExpiryTime, conweave_defaultVOQWaitingTime,
                         conweave_pathPauseTime, conweave_pathAwareRerouting);
                     sw->m_mmu->m_conweaveRouting.SetSwitchInfo(sw->m_isToR, sw->GetId());
+                }
+                if (lb_mode == 11) {
+                    sw->m_mmu->m_proteusRouting.SetSwitchInfo(sw->m_isToR, sw->GetId());
+                    sw->m_mmu->m_proteusRouting.SetConstants(proteus_probeInterval, proteus_dreTime, proteus_onewayRttLow);
                 }
             }
         }

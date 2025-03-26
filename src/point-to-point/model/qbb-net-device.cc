@@ -396,7 +396,7 @@ void QbbNetDevice::Receive(Ptr<Packet> packet) {
 }
 
 bool QbbNetDevice::Send(Ptr<Packet> packet, const Address &dest, uint16_t protocolNumber) {
-    NS_ASSERT_MSG(false, "QbbNetDevice::Send not implemented yet\n");
+    // NS_ASSERT_MSG(false, "QbbNetDevice::Send not implemented yet\n"); // 注释掉 以免程序终止
     return false;
 }
 

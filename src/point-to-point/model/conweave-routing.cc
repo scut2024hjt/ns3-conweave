@@ -41,6 +41,8 @@
 #include "ns3/simulator.h"
 #include "ns3/udp-header.h"
 
+NS_LOG_COMPONENT_DEFINE("ConWeaveRouting");
+
 namespace ns3 {
 
 /**

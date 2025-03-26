@@ -379,7 +379,7 @@ uint32_t CongaRouting::GetBestPath(uint32_t dstToRId, uint32_t nSample) {
     assert(pathItr != m_congaRoutingTable.end() && "Cannot find dstToRId from ToLeafTable");
     std::set<uint32_t>::iterator innerPathItr = pathItr->second.begin();
     if (pathItr->second.size() >= nSample) {  // exception handling
-        std::advance(innerPathItr, rand() % (pathItr->second.size() - nSample + 1));
+        std::advance(innerPathItr, rand() % (pathItr->second.size() - nSample + 1)); // 将迭代器向后随机移动0~x(确保后面至少留有nSample个位置)
     } else {
         nSample = pathItr->second.size();
         // std::cout << "WARNING - Conga's number of path sampling is higher than available paths.

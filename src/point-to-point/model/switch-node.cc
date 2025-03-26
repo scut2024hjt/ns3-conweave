@@ -49,6 +49,12 @@ SwitchNode::SwitchNode() {
     m_mmu->m_conweaveRouting.SetSwitchSendCallback(MakeCallback(&SwitchNode::DoSwitchSend, this));
     m_mmu->m_conweaveRouting.SetSwitchSendToDevCallback(
         MakeCallback(&SwitchNode::SendToDevContinue, this));
+    // Proteus's Callback for switch functions
+    m_mmu->m_proteusRouting.SetSwitchSendCallback(MakeCallback(&SwitchNode::DoSwitchSend, this));
+    m_mmu->m_proteusRouting.SetSwitchSendToDevCallback(
+        MakeCallback(&SwitchNode::SendToDevContinue, this));
+    m_mmu->m_proteusRouting.SetGetInterfaceLoadCallback(MakeCallback(&SwitchNode::CalculateInterfaceLoad, this));
+    m_mmu->m_proteusRouting.SetGetInterfacePauseCallback(MakeCallback(&SwitchNode::GetInterfacePauseStatus, this));
 
     for (uint32_t i = 0; i < pCnt; i++) {
         m_txBytes[i] = 0;
@@ -153,6 +159,20 @@ uint32_t SwitchNode::DoLbConWeave(Ptr<const Packet> p, const CustomHeader &ch,
 }
 /*----------------------------------*/
 
+/*------------------Proteus Dummy ----------------*/
+uint32_t SwitchNode::DoLbProteus(Ptr<const Packet> p, const CustomHeader &ch,
+                                    const std::vector<int> &nexthops) {
+    return DoLbFlowECMP(p, ch, nexthops);
+}
+/*----------------------------------*/
+
+bool* SwitchNode::GetInterfacePauseStatus(uint32_t interface) {
+    Ptr<QbbNetDevice> device = DynamicCast<QbbNetDevice>(m_devices[interface]);
+    bool* res = device->m_paused;
+
+    return res;
+}
+
 void SwitchNode::CheckAndSendPfc(uint32_t inDev, uint32_t qIndex) {
     Ptr<QbbNetDevice> device = DynamicCast<QbbNetDevice>(m_devices[inDev]);
     bool pClasses[qCnt] = {0};
@@ -210,6 +230,12 @@ void SwitchNode::SendToDev(Ptr<Packet> p, CustomHeader &ch) {
     // ConWeave
     if (Settings::lb_mode == 9) {
         m_mmu->m_conweaveRouting.RouteInput(p, ch);
+        return;
+    }
+
+	// Proteus
+	if(Settings::lb_mode == 11) {
+        m_mmu->m_proteusRouting.RouteInput(p, ch);
         return;
     }
 
@@ -272,6 +298,8 @@ int SwitchNode::GetOutDev(Ptr<Packet> p, CustomHeader &ch) {
             return DoLbLetflow(p, ch, nexthops);
         case 9:
             return DoLbConWeave(p, ch, nexthops); /** DUMMY: Do ECMP */
+        case 11:
+            return DoLbProteus(p, ch, nexthops); /** DUMMY: Do ECMP */
         default:
             std::cout << "Unknown lb_mode(" << Settings::lb_mode << ")" << std::endl;
             assert(false);

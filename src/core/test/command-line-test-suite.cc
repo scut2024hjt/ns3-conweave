@@ -38,7 +38,7 @@ public:
   CommandLineTestCaseBase (std::string description);
   virtual ~CommandLineTestCaseBase () {}
 
-  void Parse (const CommandLine &cmd, int n, ...);
+  void Parse (CommandLine &cmd, int n, ...);
 };
 
 CommandLineTestCaseBase::CommandLineTestCaseBase (std::string description)
@@ -47,7 +47,7 @@ CommandLineTestCaseBase::CommandLineTestCaseBase (std::string description)
 }
 
 void
-CommandLineTestCaseBase::Parse (const CommandLine &cmd, int n, ...)
+CommandLineTestCaseBase::Parse (CommandLine &cmd, int n, ...)
 {
   char **args = new char* [n+1];
   args[0] = (char *) "Test";

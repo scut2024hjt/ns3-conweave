@@ -27,6 +27,7 @@ def build(bld):
         'model/letflow-routing.cc',
         'model/conweave-routing.cc',
         'model/conweave-voq.cc',
+        'model/proteus-routing.cc',
 		'helper/selective-packet-queue.cc',
         ]
 
@@ -63,6 +64,7 @@ def build(bld):
         'model/letflow-routing.h',
         'model/conweave-routing.h',
         'model/conweave-voq.h',
+        'model/proteus-routing.h',
 		'helper/selective-packet-queue.h',
         ]
 

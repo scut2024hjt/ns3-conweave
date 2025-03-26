@@ -74,6 +74,7 @@ public:
  */
 class QbbNetDevice : public PointToPointNetDevice 
 {
+  friend class SwitchNode;
 public:
   static const uint32_t qCnt = 8;	// Number of queues/priorities used
   static const uint32_t pCnt = 257;	// Number of ports used
