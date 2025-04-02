@@ -449,12 +449,13 @@ namespace ns3 {
 			} else {  // 端口被暂停 执行proteus的重路由逻辑
 				uint64_t ttd, tqd;
 
-				ttd = m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt - m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt;
+				// 非拥塞路径为空 可能发生次优路径rtt小于最优路径rtt
+				if (m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt < m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt)
+					ttd = m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt - m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt;
+				else
+					ttd = m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt - m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt;
+				
 				tqd = GetInterfaceLoad(curIf) * 8 * 1e9 / m_outPort2BitRateMap[curIf];  // 乘1e9 转为纳秒单位
-				if (tqd == 37943) {
-					std::cout <<"here: "<< m_switch_id<<"->" <<dstToRId << ", " << ch.sip << " "<< ch.dip << std::endl;
-				}
-				// std::cout<< "ttd:" << ttd<<", tqd:" << tqd<<std::endl;
 				std::cout << "Paused!" << ttd<<","<<tqd<<"   ";  // 看下这个逻辑触发的次数
 
 				if (ttd >= tqd) {
@@ -511,7 +512,7 @@ namespace ns3 {
 				// GetInterfacePause(it->first & 0xFF)[3]
 				// 取的是it->first所指路径的第一跳接口对应的QbbNetDevice的第3条队列(udp的队列)是否被PFC暂停
 				if (GetInterfacePause(it->first & 0xFF)[3] == false) {  // 若PFC恢复
-					it->second == true;  // true表示active
+					it->second = true;  // true表示active
 				}
 			}
 		}
