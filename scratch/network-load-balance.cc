@@ -512,6 +512,7 @@ void get_pfc(FILE *fout, Ptr<QbbNetDevice> dev, uint32_t type) {
             dev->GetNode()->GetNodeType(), dev->GetIfIndex(), type);
 }
 
+
 /*******************************************************************/
 #if (false)
 
@@ -1589,6 +1590,7 @@ int main(int argc, char *argv[]) {
                                         .insert(pathId);
                                     struct proteusPathInfo initPathInfo;
                                     swSrc->m_mmu->m_proteusRouting.m_proteusPathInfoTable[swDstId][pathId] = initPathInfo;
+                                    swSrc->m_mmu->m_proteusRouting.m_proteusPathStatus[swDstId][pathId] = true;
                                 }
                                 continue;
                             }
@@ -1627,6 +1629,7 @@ int main(int argc, char *argv[]) {
                                             .insert(pathId);
                                         struct proteusPathInfo initPathInfo;
                                         swSrc->m_mmu->m_proteusRouting.m_proteusPathInfoTable[swDstId][pathId] = initPathInfo;
+                                        swSrc->m_mmu->m_proteusRouting.m_proteusPathStatus[swDstId][pathId] = true;
                                     }
                                     continue;
                                 }
@@ -1669,6 +1672,7 @@ int main(int argc, char *argv[]) {
                                                 .insert(pathId);
                                             struct proteusPathInfo initPathInfo;
                                             swSrc->m_mmu->m_proteusRouting.m_proteusPathInfoTable[swDstId][pathId] = initPathInfo;
+                                            swSrc->m_mmu->m_proteusRouting.m_proteusPathStatus[swDstId][pathId] = true;
                                         }
                                         continue;
                                     } else {
@@ -1834,6 +1838,7 @@ int main(int argc, char *argv[]) {
     Simulator::Destroy();
     NS_LOG_INFO("Total number of packets: " << RdmaHw::nAllPkts);
     NS_LOG_INFO("Done.");
+    std::cout<<Settings::count_select[0]<<", "<<Settings::count_select[1]<<", "<<Settings::count_select[2]<<", "<<Settings::count_select[3]<<std::endl;
     endt = clock();
     std::cerr << (double)(endt - begint) / CLOCKS_PER_SEC << "\n";
 }

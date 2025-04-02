@@ -137,6 +137,8 @@ class Settings {
 
     static uint32_t dropped_pkt_sw_ingress;
     static uint32_t dropped_pkt_sw_egress;
+    
+    static uint32_t count_select[4];
 };
 
 }  // namespace ns3

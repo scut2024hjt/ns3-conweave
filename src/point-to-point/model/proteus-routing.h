@@ -66,9 +66,11 @@ class ProteusRouting: public Object {
         // public 以便在脚本中初始化
         // 存储路径信息的表  ToRId --> <pathId, pathInfo>
         std::map<uint32_t, std::map<uint32_t, struct proteusPathInfo>> m_proteusPathInfoTable;
+        std::map<uint32_t, std::map<uint32_t, bool>>m_proteusPathStatus;
 
-        std::vector<uint32_t> GetPahtSet(uint32_t dstToRId, uint32_t nPath);
+        std::vector<uint32_t> GetPathSet(uint32_t dstToRId, uint32_t nPath);
         uint32_t GetFinalPath(uint32_t dstToRId, std::vector<uint32_t>, CustomHeader& ch);
+        bool getBetterPath(uint64_t now, uint64_t qpkey ,uint32_t dstToRId, uint32_t& betterPath);
         
         // periodic events
         EventId m_probeEvent;
@@ -119,7 +121,8 @@ class ProteusRouting: public Object {
         // probeToRId --> ptr_probePathId
         // std::map<uint32_t, std::map<uint32_t, std::pair<bool, struct proteusPathInfo>>::iterator> m_proteusFbPathItr;
 
-        std::map<uint64_t, uint32_t> m_proteusFlowTable;  // QpKey --> pathId
+        std::map<uint64_t, uint32_t>m_proteusFlowTable;  // QpKey --> pathId
+        std::map<uint64_t, uint64_t>m_proteusFlowLastTxTime;  // qpkey(flow) --> lastTxTimestamp
 
         std::map<uint32_t, uint32_t> m_DreMap;  // inPort(spine->ToR) -> DRE (at DstToR)
         
@@ -127,6 +130,9 @@ class ProteusRouting: public Object {
         double m_alpha;  // dre algorithm (e.g., 0.2)
         Time m_dreTime;  // dre alogrithm (e.g., 200us)
         Time m_onewayRttLow;
+
+        void updatePathStatus(uint32_t dstToRId);
+        uint32_t EcmpHash(CustomHeader &ch, size_t len, uint32_t seed);
 };
 
 class ProteusTag : public Tag {

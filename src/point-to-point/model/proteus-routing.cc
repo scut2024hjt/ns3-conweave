@@ -48,6 +48,10 @@ namespace ns3 {
 		// get ProteusTag
 		ProteusTag proteusTag;
 		bool foundProteusTag = p->PeekPacketTag(proteusTag);
+		
+		FlowIdTag inportTag;
+		p->PeekPacketTag(inportTag);
+		uint32_t inport = inportTag.GetFlowId();
 
 		/*************  一些必做的处理  *************/
 		uint32_t srcToRId = Settings::hostIp2SwitchId[ch.sip];
@@ -69,8 +73,6 @@ namespace ns3 {
 		}
 
 
-
-
 		if (m_isToR) {
 			// 启动周期性主动探测  只ToR需要探测
 			if (!m_probeEvent.IsRunning()) {
@@ -89,6 +91,7 @@ namespace ns3 {
 					m_proteusFbPathPtr[dstToRId] = 0;
 				}
 				
+				// 捎带路径信息
 				std::vector<std::tuple<uint32_t, bool, uint64_t>>::iterator it;
 				if (m_proteusFbPathTable.find(dstToRId) != m_proteusFbPathTable.end()) {  // findout 就有至少一条路径信息
 					it = m_proteusFbPathTable.find(dstToRId)->second.begin();
@@ -124,14 +127,16 @@ namespace ns3 {
 							proteusFbTag.SetFbPathId(std::get<0>(*it));
 							proteusFbTag.SetPathRtt(std::get<2>(*it));
 
-							uint32_t inport = m_pathId2Port[proteusFbTag.GetFbPahtId()];
-							double utilization = GetInPortUtil(inport);
+							uint32_t fbPathInport = m_pathId2Port[proteusFbTag.GetFbPahtId()];
+							double utilization = GetInPortUtil(fbPathInport);
 							proteusFbTag.SetPathUtilization(utilization);
 
 							p->AddPacketTag(proteusFbTag);
 						}
 					}
 				}
+
+				updatePathStatus(dstToRId);
 
 				std::set<uint32_t> pathSet = m_proteusRoutingTable[dstToRId];
 				
@@ -140,14 +145,35 @@ namespace ns3 {
 				uint32_t selectedPath = *(std::next(pathSet.begin(), rand() % pathSet.size()));
 				std::vector<uint32_t> selectedPathSet;
 
+				// per-flow
+				// uint64_t qpkey = ((uint64_t)ch.dip << 32) | ((uint64_t)ch.udp.sport << 16) | (uint64_t)ch.udp.pg | (uint64_t)ch.udp.dport;
+				// // qpkey = (uint64_t)EcmpHash(ch, 12, m_switch_id);  // 没区别
+				// if (m_proteusFlowTable.find(qpkey) != m_proteusFlowTable.end()) {
+				// 	selectedPath = m_proteusFlowTable[qpkey];
+				// } else {				
+				// 	selectedPathSet = GetPathSet(dstToRId, 4);
+				// 	selectedPath = GetFinalPath(dstToRId, selectedPathSet, ch);
+					
+				// 	m_proteusFlowTable[qpkey] = selectedPath;
+				// }
+
+				// per-packet
 				uint64_t qpkey = ((uint64_t)ch.dip << 32) | ((uint64_t)ch.udp.sport << 16) | (uint64_t)ch.udp.pg | (uint64_t)ch.udp.dport;
 				if (m_proteusFlowTable.find(qpkey) != m_proteusFlowTable.end()) {
 					selectedPath = m_proteusFlowTable[qpkey];
-				} else {				
-					selectedPathSet = GetPahtSet(dstToRId, 4);
+					uint32_t betterPath = selectedPath;					
+
+					// 若是有更好的路径
+					if (getBetterPath(now.GetNanoSeconds(), qpkey, dstToRId, betterPath)) {  // betterPath接收返回值
+						selectedPath = betterPath;
+					}
+				} else {
+					selectedPathSet = GetPathSet(dstToRId, 4);
 					selectedPath = GetFinalPath(dstToRId, selectedPathSet, ch);
-					m_proteusFlowTable[qpkey] = selectedPath;
 				}
+				m_proteusFlowTable[qpkey] = selectedPath;
+				m_proteusFlowLastTxTime[qpkey] = now.GetNanoSeconds();
+
 
 				proteusTag.SetPathId(selectedPath);
 				proteusTag.SetHopCount(0);
@@ -166,11 +192,9 @@ namespace ns3 {
 				// 			<< std::endl;
 
 				// 收到数据包 先更新本地端口Dre
-				FlowIdTag inport;
-				p->PeekPacketTag(inport);
-				m_pathId2Port[proteusTag.GetPathId()] = inport.GetFlowId();
+				m_pathId2Port[proteusTag.GetPathId()] = inport;
 
-				UpdateLocalDre(p, ch, inport.GetFlowId());
+				UpdateLocalDre(p, ch, inport);
 
 
 				ProteusFeedbackTag proteusFbTag;
@@ -289,7 +313,7 @@ namespace ns3 {
 		return ((uint8_t*)&path)[hopCount];
 	}
 
-	std::vector<uint32_t> ProteusRouting::GetPahtSet(uint32_t dstToRId, uint32_t nPath) {
+	std::vector<uint32_t> ProteusRouting::GetPathSet(uint32_t dstToRId, uint32_t nPath) {
 		std::vector<uint32_t> nonCongested_path, undetermined_path, congested_path;
 		std::vector<uint32_t> selected_path;
 		uint32_t selectedCount = 0;
@@ -298,6 +322,11 @@ namespace ns3 {
 
 		std::map<uint32_t, proteusPathInfo>::iterator it;
 		for (it = m_proteusPathInfoTable.find(dstToRId)->second.begin(); it != m_proteusPathInfoTable.find(dstToRId)->second.end(); it++) {
+			// false 表示路径为 inative
+			if (m_proteusPathStatus[dstToRId][it->first] == false) {
+				continue;
+			}
+
 			if (m_onewayRttLow.GetNanoSeconds() > it->second.oneway_rtt) {
 				nonCongested_path.push_back(it->first);
 			} else if(it->second.link_utilization < 0.6) {
@@ -311,6 +340,25 @@ namespace ns3 {
 			// }
 		}
 		NS_ASSERT_MSG(m_proteusPathInfoTable.find(dstToRId)!=m_proteusPathInfoTable.end(), "m_proteusPathInfoTable can not find");
+
+		// 按优先顺序从三个路径集随机选
+		// while (!nonCongested_path.empty()) {
+		// 	uint32_t idx = rand() % nonCongested_path.size();
+		// 	selected_path.push_back(nonCongested_path[idx]);
+		// 	nonCongested_path.erase(nonCongested_path.begin() + idx);
+		// }
+		// while (!undetermined_path.empty()) {
+		// 	uint32_t idx = rand() % undetermined_path.size();
+		// 	selected_path.push_back(undetermined_path[idx]);
+		// 	undetermined_path.erase(undetermined_path.begin() + idx);
+		// }
+		// while (!congested_path.empty()) {
+		// 	uint32_t idx = rand() % congested_path.size();
+		// 	selected_path.push_back(congested_path[idx]);
+		// 	congested_path.erase(congested_path.begin() + idx);
+		// }
+		// return selected_path;
+
 		
 
 		// 从非拥塞路径集中取路径
@@ -377,15 +425,7 @@ namespace ns3 {
 	}
 
 	// 根据proteus重路由逻辑 选出可以走的路径	
-	uint32_t ProteusRouting::GetFinalPath(uint32_t dstToRId, std::vector<uint32_t> pathSet, CustomHeader& ch) {
-		/*
-		while {
-			if(端口被暂停) {
-				比较ttd和tqd 决定是否重路由
-			}
-		}		
-		*/ 
-	
+	uint32_t ProteusRouting::GetFinalPath(uint32_t dstToRId, std::vector<uint32_t> pathSet, CustomHeader& ch) {		
 		// return pathSet[0];
 
 		// std::srand(Simulator::Now().GetInteger());
@@ -393,41 +433,140 @@ namespace ns3 {
 
 		uint32_t selectedPath = pathSet[0];
 
-		for (auto pathIt = pathSet.begin(); pathIt != pathSet.end(); pathIt++) {
-			if (pathSet.size() == 1) {  // 只剩一条路径了 那就只能用它了
-				selectedPath = *pathIt;
-				break;
-			}
+		if (pathSet.size() == 1) return pathSet[0];
 
-			uint32_t interface = *pathIt & 0xFF;  // pathSet[0]为第一跳 即当前交换机输出端口
+		uint32_t i = 0;
+		for (i = 0; i < pathSet.size()-1; i++) {
+			uint32_t curPath = pathSet[i];
 
-			bool* pauseStatus = GetInterfacePause(interface);
+			uint32_t curIf = curPath & 0xFF;  // pathSet[0]为第一跳 即当前交换机输出端口
+
+			bool* pauseStatus = GetInterfacePause(curIf);
 			if (!pauseStatus[ch.udp.pg]) {  // 可能没必要这么写吧 毕竟udp的优先级固定为3  非udp数据包也不会被proteus等负载均衡方法处理
-				selectedPath = *pathIt;
+				selectedPath = curPath;
+				Settings::count_select[i]++;
 				break;
 			} else {  // 端口被暂停 执行proteus的重路由逻辑
 				uint64_t ttd, tqd;
 
-				ttd = m_proteusPathInfoTable[dstToRId][*pathIt].oneway_rtt - m_proteusPathInfoTable[dstToRId][*(pathIt+1)].oneway_rtt;
-				tqd = GetInterfaceLoad(interface) * 8 * 1e9 / m_outPort2BitRateMap[interface];  // 乘1e9 转为纳秒单位
+				ttd = m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt - m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt;
+				tqd = GetInterfaceLoad(curIf) * 8 * 1e9 / m_outPort2BitRateMap[curIf];  // 乘1e9 转为纳秒单位
+				if (tqd == 37943) {
+					std::cout <<"here: "<< m_switch_id<<"->" <<dstToRId << ", " << ch.sip << " "<< ch.dip << std::endl;
+				}
 				// std::cout<< "ttd:" << ttd<<", tqd:" << tqd<<std::endl;
-				std::cout << "Paused!  ";  // 看下这个逻辑触发的次数
+				std::cout << "Paused!" << ttd<<","<<tqd<<"   ";  // 看下这个逻辑触发的次数
 
-				if (ttd > tqd) {
-					selectedPath = *pathIt;
+				if (ttd >= tqd) {
+					selectedPath = curPath;
+					Settings::count_select[i]++;
 					std::cout << "select!	" << std::endl;
 					// 标记需要更新ttd  真正转发时更新。不对 leaf-spine下 后续没有重路由的可能性 没必要更新ttd 没用
 					break;
 				} else {
 					// 设置当前路径inactive 直到resume
-
-					pathSet.erase(pathIt);
+					m_proteusPathStatus[dstToRId][curPath] = false;
 				}
 			}
 		}
 
-		return selectedPath;
+		if (i == pathSet.size()-1) {
+			Settings::count_select[i]++;
+			return pathSet[i];
+			// std::srand(Simulator::Now().GetInteger());
+			// return pathSet[rand() % pathSet.size()];
+		} else {
+			return selectedPath;
+		}
 	}
+
+	bool ProteusRouting::getBetterPath(uint64_t now, uint64_t qpkey ,uint32_t dstToRId, uint32_t& betterPath) {
+		uint32_t selectedPath = m_proteusFlowTable[qpkey];
+		uint64_t selectedPathRtt = m_proteusPathInfoTable[dstToRId][selectedPath].oneway_rtt;
+		uint32_t minPathRtt = selectedPathRtt;
+		
+		std::map<uint32_t, proteusPathInfo>::iterator it;
+		bool res = 0;
+		for (it = m_proteusPathInfoTable.find(dstToRId)->second.begin(); it != m_proteusPathInfoTable.find(dstToRId)->second.end(); it++) {
+			if (it->second.oneway_rtt < minPathRtt) {
+				uint64_t rttDiff = (selectedPathRtt - it->second.oneway_rtt);
+				uint64_t txDiff = now - m_proteusFlowLastTxTime[qpkey];  // nanoseconds
+				
+				if (txDiff > rttDiff) {
+					res = 1;
+
+					minPathRtt = it->second.oneway_rtt;
+					betterPath = it->first;
+				}
+			}
+		}
+
+		return res;
+	}
+
+	void ProteusRouting::updatePathStatus(uint32_t dstToRId) {
+		std::map<uint32_t, bool>::iterator it = m_proteusPathStatus.find(dstToRId)->second.begin();
+		for (; it != m_proteusPathStatus.find(dstToRId)->second.end(); it++) {
+			if (it->second == false) {
+				// GetInterfacePause(it->first & 0xFF)[3]
+				// 取的是it->first所指路径的第一跳接口对应的QbbNetDevice的第3条队列(udp的队列)是否被PFC暂停
+				if (GetInterfacePause(it->first & 0xFF)[3] == false) {  // 若PFC恢复
+					it->second == true;  // true表示active
+				}
+			}
+		}
+	}
+
+	uint32_t ProteusRouting::EcmpHash(CustomHeader &ch, size_t len, uint32_t seed) {
+		uint32_t h = seed;
+
+		union {
+			uint8_t u8[4 + 4 + 2 + 2];
+			uint32_t u32[3];
+		} buf;
+		
+		buf.u32[0] = ch.sip;
+		buf.u32[1] = ch.dip;
+		buf.u32[2] = ch.udp.sport | ((uint32_t)ch.udp.dport << 16);
+		
+		const uint8_t *key = buf.u8;
+
+		if (len > 3) {
+			const uint32_t *key_x4 = (const uint32_t *)key;
+			size_t i = len >> 2;
+			do {
+				uint32_t k = *key_x4++;
+				k *= 0xcc9e2d51;
+				k = (k << 15) | (k >> 17);
+				k *= 0x1b873593;
+				h ^= k;
+				h = (h << 13) | (h >> 19);
+				h += (h << 2) + 0xe6546b64;
+			} while (--i);
+			key = (const uint8_t *)key_x4;
+		}
+		if (len & 3) {
+			size_t i = len & 3;
+			uint32_t k = 0;
+			key = &key[i - 1];
+			do {
+				k <<= 8;
+				k |= *key--;
+			} while (--i);
+			k *= 0xcc9e2d51;
+			k = (k << 15) | (k >> 17);
+			k *= 0x1b873593;
+			h ^= k;
+		}
+		h ^= len;
+		h ^= h >> 16;
+		h *= 0x85ebca6b;
+		h ^= h >> 13;
+		h *= 0xc2b2ae35;
+		h ^= h >> 16;
+		return h;
+	}
+	
 
 	/*************  周期性主动探测  *************/ 
 	void ProteusRouting::ProbeEvent() {
@@ -435,7 +574,7 @@ namespace ns3 {
 		// std::set<uint32_t>::iterator pathIter;
 		// for (dstIter = m_proteusPathTable.begin(); dstIter != m_proteusPathTable.end(); dstIter++) {
 		// 	for (pathIter = m_proteusRoutingTable.find(dstIter->first)->second.begin();  pathIter != m_proteusRoutingTable.find(dstIter->first)->second.end(); pathIter++) {
-		// 		if (dstIter->second.find(*pathIter) == dstIter->second.end()) {  //没找到对应路径 插入
+		// 		if (dstIter->second.find(*pathIter) == dstIter->second.end()) {  // 没找到对应路径 插入
 		// 			dstIter->second[*pathIter]
 		// 		}
 		// 	}
