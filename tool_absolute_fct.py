@@ -21,6 +21,36 @@ def calculate_total_avg_fct(input_file, time_limit_start, time_limit_end):
     else:
         return None  # 如果没有流量数据，返回 None
 
+def extract_absolute_fct(filename):    
+    try:
+        with open(filename, 'r') as file:
+            findout = False
+            results = {}
+            for line in file:
+                if "ABSOLUTE" in line:
+                    findout = True
+                    continue
+                
+                if findout:
+                    if "<1BDP" in line:
+                        line = line.strip()
+                        split_line = line.split(',')
+                        if len(split_line) >= 2:
+                            results['<1BDP'] = float(split_line[1])
+                        print(results['<1BDP'])
+                    elif ">1BDP" in line:
+                        line = line.strip()
+                        split_line = line.split(',')
+                        if len(split_line) >= 2:
+                            results['>1BDP'] = float(split_line[1])
+                        print(results['>1BDP'])
+
+
+    except FileNotFoundError:
+        print (f"错误：文件 '{filename}' 未找到")
+    except Exception as e:
+        print (f"读取文件时发生错误: {str (e)}")
+        return None
 
 # 主程序
 if __name__ == "__main__":
@@ -42,9 +72,14 @@ if __name__ == "__main__":
     input_file = "./mix/output/" + args.id + "/" + args.id + "_out_fct.txt"
     total_avg_fct = calculate_total_avg_fct(input_file, fct_analysis_time_limit_begin, fct_analysistime_limit_end)
 
+
+    # 获取长短流的afct
+    absolutefct_file = "./mix/output/" + args.id + "/" + args.id + "_out_fct_summary.txt"
+    extract_absolute_fct(absolutefct_file)
+
     # 输出结果
     if total_avg_fct is not None:
-        print(f"所有流量的平均 FCT: {total_avg_fct:.3f} μs")
+        print(f"{total_avg_fct:.3f} μs")  # 所有flows的平均afct
     else:
         print("未找到有效的流量数据。")
 

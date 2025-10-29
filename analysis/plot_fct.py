@@ -176,7 +176,8 @@ def main():
     file_dir = getFilePath()
     fig_dir = file_dir + "/figures"
     output_dir = file_dir + "/../mix/output"
-    history_filename = file_dir + "/../mix/.history"
+    # history_filename = file_dir + "/../mix/.history"
+    history_filename = file_dir + "/../mix/plot_history"
 
     # read history file
     map_key_to_id = dict()
@@ -222,7 +223,7 @@ def main():
         
         xvals = [i for i in range(STEP, 100 + STEP, STEP)]
 
-        lbmode_order = ["fecmp", "conga", "letflow", "conweave"]
+        lbmode_order = ["fecmp", "drill", "conga", "letflow", "conweave", "proteus"]
         for tgt_lbmode in lbmode_order:
             for vv in v:
                 config_id = vv[0]
@@ -275,7 +276,7 @@ def main():
         
         xvals = [i for i in range(STEP, 100 + STEP, STEP)]
 
-        lbmode_order = ["fecmp", "conga", "letflow", "conweave"]
+        lbmode_order = ["fecmp", "drill", "conga", "letflow", "conweave", "proteus"]
         for tgt_lbmode in lbmode_order:
             for vv in v:
                 config_id = vv[0]

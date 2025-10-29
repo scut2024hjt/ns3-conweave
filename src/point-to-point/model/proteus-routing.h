@@ -16,13 +16,18 @@
 
 namespace ns3 {
 
+#define proteus_switch_fprintf 0
+
+#define proteus_perpacketdelay 1000
+#define proteus_PATHRTTINC 1  // 1表示直接在m_proteusPathInfoTable加rtt，0表示在另外的表m_proteusRttIncTable加并只影响getbetter
+
+
 struct proteusPathInfo {
     uint64_t oneway_rtt;
     double link_utilization;
 
     proteusPathInfo(uint64_t rtt = 0, double util = 0) : oneway_rtt(rtt), link_utilization(util) {};
 };
-
 
 class ProteusRouting: public Object {
     friend class SwitchMmu;
@@ -56,7 +61,7 @@ class ProteusRouting: public Object {
 
         // SET functions
         void SetSwitchInfo(bool isToR, uint32_t switch_id);
-        void SetConstants(Time probeInterval, Time dreTime, Time onewayRttlow);
+        void SetConstants(Time probeInterval, uint64_t deltaBetterRtt, Time dreTime, Time onewayRttlow, double linkThreshold, uint32_t nsample);
 
         uint32_t GetOutPortFromPath(const uint32_t& path, const uint32_t& hopCount);
 
@@ -66,11 +71,20 @@ class ProteusRouting: public Object {
         // public 以便在脚本中初始化
         // 存储路径信息的表  ToRId --> <pathId, pathInfo>
         std::map<uint32_t, std::map<uint32_t, struct proteusPathInfo>> m_proteusPathInfoTable;
+        std::map<uint32_t, std::map<uint32_t, struct proteusPathInfo>> m_proteusOriPathInfoTable;
+        std::map<uint32_t, std::map<uint32_t, uint64_t>> m_proteusRttIncTable;
+        std::map<uint32_t, std::map<uint32_t, uint64_t>> m_proteusPathInfoLU;  // LU: last update
+        std::map<uint32_t, int64_t> m_proteusAllPathLastUpdate;
+        std::map<uint32_t, uint8_t> m_proteusAllPathUpdateFlag;  // dstToRId, allpath update flag
+        std::map<uint32_t, std::map<uint32_t, uint64_t>> m_proteusPathInfoStore;
         std::map<uint32_t, std::map<uint32_t, bool>>m_proteusPathStatus;
 
         std::vector<uint32_t> GetPathSet(uint32_t dstToRId, uint32_t nPath);
-        uint32_t GetFinalPath(uint32_t dstToRId, std::vector<uint32_t>, CustomHeader& ch);
-        bool getBetterPath(uint64_t now, uint64_t qpkey ,uint32_t dstToRId, uint32_t& betterPath);
+        uint32_t GetFinalPath(uint32_t dstToRId, std::vector<uint32_t> &pathSet, CustomHeader &ch);
+        uint32_t GetFinalPath_Temp(uint32_t dstToRId, std::vector<uint32_t> &pathSet, CustomHeader &ch);
+        bool getBetterPath(int64_t now, uint64_t lastTxTime, uint32_t dstToRId, uint32_t& betterPath);
+        bool getBetterPath_Temp(int64_t now, uint64_t lastTxTime, uint32_t dstToRId, uint32_t& betterPath);
+        
         
         // periodic events
         EventId m_probeEvent;
@@ -96,6 +110,7 @@ class ProteusRouting: public Object {
     private:
         bool m_isToR;
         uint32_t m_switch_id;
+        FILE *ftxgap, *fupdategap, *ftxdiff, *fallupdategap, *fpathselect, *fpathrtt;
 
         // callback
         SwitchSendCallback m_switchSendCallback;  // bound to SwitchNode::SwitchSend
@@ -106,6 +121,7 @@ class ProteusRouting: public Object {
 
         // proteus constants
         Time m_probeInterval;
+        uint64_t m_deltaBetterRtt;
 
         // 发出探测包的ToRId --> <路径Id, 路径信息>
         // probeToRId --> <probePathId, updateFlag>  因为要轮询的方式进行捎带 所以用vector存
@@ -123,6 +139,9 @@ class ProteusRouting: public Object {
 
         std::map<uint64_t, uint32_t>m_proteusFlowTable;  // QpKey --> pathId
         std::map<uint64_t, uint64_t>m_proteusFlowLastTxTime;  // qpkey(flow) --> lastTxTimestamp
+        std::map<uint64_t, bool>m_proteusRerouteRecord;
+        std::map<uint64_t, uint64_t>m_proteusFlowLastSelectTime;
+        std::map<uint64_t, uint64_t>m_proteusFlowPackets;
 
         std::map<uint32_t, uint32_t> m_DreMap;  // inPort(spine->ToR) -> DRE (at DstToR)
         
@@ -130,8 +149,12 @@ class ProteusRouting: public Object {
         double m_alpha;  // dre algorithm (e.g., 0.2)
         Time m_dreTime;  // dre alogrithm (e.g., 200us)
         Time m_onewayRttLow;
+        double m_linkUtilThreshold;
+        uint32_t m_nsample;
 
         void updatePathStatus(uint32_t dstToRId);
+        void RecordPathType(uint32_t dstToRId, uint32_t path);
+
         uint32_t EcmpHash(CustomHeader &ch, size_t len, uint32_t seed);
 };
 

@@ -13,6 +13,6 @@ with open(file, 'r') as file:
     for line in file:
         parts = line.strip().split()
         if len(parts) >= 5:
-            total += int(parts[4])
+            total += int(parts[3])
 
 print(total)

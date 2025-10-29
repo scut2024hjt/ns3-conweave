@@ -1,5 +1,5 @@
 TOPOLOGY_FILE config/leaf_spine_128_100G_OS2.txt
-FLOW_FILE config/L_25.00_CDF_AliStorage2019_N_128_T_10ms_B_100_flow.txt
+FLOW_FILE mix/debug/allreduce_with_bg.txt
 
 FLOW_INPUT_FILE mix/debug/in.txt
 CNP_OUTPUT_FILE mix/debug/out_cnp.txt
@@ -13,15 +13,15 @@ CONN_MON_FILE mix/debug/out_conn.txt
 EST_ERROR_MON_FILE mix/debug/out_est_error.txt
 
 QLEN_MON_START 2.0
-QLEN_MON_END 2.01
+QLEN_MON_END 2.09
 SW_MONITORING_INTERVAL 10000
 
 FLOWGEN_START_TIME 2.0
-FLOWGEN_STOP_TIME 2.01
+FLOWGEN_STOP_TIME 2.09
 BUFFER_SIZE 9
 
 CC_MODE 1
-LB_MODE 11
+LB_MODE 0
 ENABLE_PFC 1
 ENABLE_IRN 0
 

@@ -28,6 +28,12 @@ uint32_t Settings::dropped_pkt_sw_egress = 0;
 /* for load balancer */
 std::map<uint32_t, uint32_t> Settings::hostIp2SwitchId;
 
-uint32_t Settings::count_select[4] = {0,0,0,0};
+uint32_t Settings::count_select[10] = {0,0,0,0};
+uint64_t Settings::count_packet[3] = {0, 0, 0};
+uint64_t Settings::count_maxutil[2] = {0, 0};
+uint64_t Settings::count_pfc[4] = {0,0,0,0};
+uint32_t Settings::count_select_path[5];
+uint64_t Settings::total_diff[2] = {0, 0};
+
 
 }  // namespace ns3

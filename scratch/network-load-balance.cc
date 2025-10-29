@@ -60,7 +60,7 @@ uint32_t lb_mode = 0;
 // Conga params (based on paper recommendation)
 Time conga_flowletTimeout = MicroSeconds(100);  // 100us
 Time conga_dreTime = MicroSeconds(50);
-Time conga_agingTime = MicroSeconds(500);
+Time conga_agingTime = MicroSeconds(200);
 uint32_t conga_quantizeBit = 3;
 double conga_alpha = 0.2;
 
@@ -77,9 +77,13 @@ Time conweave_defaultVOQWaitingTime = MicroSeconds(500);  // default flush timer
 bool conweave_pathAwareRerouting = true;
 
 //Proteus params
-Time proteus_probeInterval = Time(MicroSeconds(100));
-Time proteus_dreTime = Time(MicroSeconds(200));
-Time proteus_onewayRttLow = NanoSeconds(4160*1.3);
+Time proteus_probeInterval = Time(NanoSeconds(4500));
+uint64_t proteus_deltaBetterRtt = 6000;  // 单位纳秒
+Time proteus_dreTime = Time(MicroSeconds(50));
+Time proteus_onewayRttLow = NanoSeconds(0);  // 若Rttlow设为0 则取 (maxRtt/2 * RttLow_ratio)
+double proteus_onewayRttLow_ratio = 1.4;
+double prtoeus_linkUtilThreshold = 0.6;
+uint32_t proteus_nsample = 4;
 
 /*------------------------ simulation variables -----------------------------*/
 uint64_t one_hop_delay = 1000;  // nanoseconds
@@ -273,7 +277,6 @@ void ScheduleFlowInputs(FILE *infile) {
                       << " ==> cannot be found from database" << std::endl;
             assert(false);
         }
-
         RdmaClientHelper clientHelper(
             pg, serverAddress[src], serverAddress[dst], sport, dport, target_len,
             has_win ? (global_t == 1 ? maxBdp : pairBdp[n.Get(src)][n.Get(dst)]) : 0,
@@ -1490,6 +1493,7 @@ int main(int argc, char *argv[]) {
         }
     }
     fprintf(stderr, "maxRtt: %lu, maxBdp: %lu\n", maxRtt, maxBdp);
+    if (proteus_onewayRttLow.GetNanoSeconds() == 0) proteus_onewayRttLow = NanoSeconds((uint64_t)(maxRtt * proteus_onewayRttLow_ratio / 2));
     assert(maxBdp == irn_bdp_lookup);
 
     std::cout << "Configuring switches" << std::endl;
@@ -1590,6 +1594,7 @@ int main(int argc, char *argv[]) {
                                         .insert(pathId);
                                     struct proteusPathInfo initPathInfo;
                                     swSrc->m_mmu->m_proteusRouting.m_proteusPathInfoTable[swDstId][pathId] = initPathInfo;
+                                    swSrc->m_mmu->m_proteusRouting.m_proteusOriPathInfoTable[swDstId][pathId] = initPathInfo;
                                     swSrc->m_mmu->m_proteusRouting.m_proteusPathStatus[swDstId][pathId] = true;
                                 }
                                 continue;
@@ -1629,6 +1634,7 @@ int main(int argc, char *argv[]) {
                                             .insert(pathId);
                                         struct proteusPathInfo initPathInfo;
                                         swSrc->m_mmu->m_proteusRouting.m_proteusPathInfoTable[swDstId][pathId] = initPathInfo;
+                                        swSrc->m_mmu->m_proteusRouting.m_proteusOriPathInfoTable[swDstId][pathId] = initPathInfo;
                                         swSrc->m_mmu->m_proteusRouting.m_proteusPathStatus[swDstId][pathId] = true;
                                     }
                                     continue;
@@ -1672,6 +1678,7 @@ int main(int argc, char *argv[]) {
                                                 .insert(pathId);
                                             struct proteusPathInfo initPathInfo;
                                             swSrc->m_mmu->m_proteusRouting.m_proteusPathInfoTable[swDstId][pathId] = initPathInfo;
+                                            swSrc->m_mmu->m_proteusRouting.m_proteusOriPathInfoTable[swDstId][pathId] = initPathInfo;
                                             swSrc->m_mmu->m_proteusRouting.m_proteusPathStatus[swDstId][pathId] = true;
                                         }
                                         continue;
@@ -1737,7 +1744,9 @@ int main(int argc, char *argv[]) {
                 }
                 if (lb_mode == 11) {
                     sw->m_mmu->m_proteusRouting.SetSwitchInfo(sw->m_isToR, sw->GetId());
-                    sw->m_mmu->m_proteusRouting.SetConstants(proteus_probeInterval, proteus_dreTime, proteus_onewayRttLow);
+                    sw->m_mmu->m_proteusRouting.SetConstants(proteus_probeInterval, proteus_deltaBetterRtt, proteus_dreTime,
+                    											proteus_onewayRttLow, prtoeus_linkUtilThreshold,
+                                                                proteus_nsample);
                 }
             }
         }
@@ -1839,6 +1848,11 @@ int main(int argc, char *argv[]) {
     NS_LOG_INFO("Total number of packets: " << RdmaHw::nAllPkts);
     NS_LOG_INFO("Done.");
     std::cout<<Settings::count_select[0]<<", "<<Settings::count_select[1]<<", "<<Settings::count_select[2]<<", "<<Settings::count_select[3]<<std::endl;
+    std::cout<< "total packets:" << Settings::count_packet[0]<<", getbetter:" << Settings::count_packet[1]<< ", getbetterflow num:" << Settings::count_packet[2]<< std::endl;
+    std::cout << "count_pfc total:" << Settings::count_pfc[0] << ", nonCongested:" << Settings::count_pfc[1] << ", Undetermined:" << Settings::count_pfc[2] << ", Congested:" << Settings::count_pfc[3] << std::endl;
+    // std::cout<< Settings::Settings::count_maxutil[0] << "," << Settings::count_maxutil[1]<<std::endl;
+    std::cout << "select path total:" << Settings::count_select_path[0] << ", nonCongested:"<<Settings::count_select_path[1]<<", Undetermined:"<<Settings::count_select_path[2]<<", Congested:" << Settings::count_select_path[3]<<std::endl;
+    std::cout << "total rttdiff: 满足getbetter阈值的: " << Settings::total_diff[0] << " 且不满足diff的: " << Settings::total_diff[1] << std::endl;
     endt = clock();
     std::cerr << (double)(endt - begint) / CLOCKS_PER_SEC << "\n";
 }

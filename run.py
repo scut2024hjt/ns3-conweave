@@ -107,15 +107,16 @@ lb_modes = {
     "conga": 3,
     "letflow": 6,
     "conweave": 9,
-    "proteus": 11,
+    "proteus": 11,  
 }
 
 topo2bdp = {
     "leaf_spine_128_100G_OS2": 104000,  # 2-tier -> all 100Gbps
-    # rtt = delay*2 + txdelay = (4*1000ns)*2 + 4*(payload_size*8*1e9 btis/ 40Gbps) = 8000ns + 4*(8000/40) = 8800
+
+    # rtt = delay*2 + txdelay = (4*1000ns)* 2 + 4*(payload_size*8*1e9 btis/ 40Gbps) = 8000ns + 4*(8000/40) = 8800
     # rtt这里的txdelay 不应该再乘以2吗？？
     # bdp = rtt * bw = 8800 * 40G / 8 = 44000 bytes
-    "leaf_spine_128_40G_OS2": 44000,  # 2-tier -> all 40Gbps  
+    "leaf_spine_128_40G_OS2": 44000,  # 2-tier -> all 40Gbps
     "fat_k8_100G_OS2": 156000,  # 3-tier -> all 100Gbps
 }
 
@@ -243,6 +244,13 @@ def main():
             bw=args.bw + "G",
             time=args.simul_time,
             output=os.getcwd() + "/config/" + flow + ".txt"))
+        # os.system("python ./traffic_gen/traffic_gen_nlb.py -c {cdf} -n {n_host} -b {bw} -t {time} -o {output}".format(
+        # cdf=os.getcwd() + "/traffic_gen/" + args.cdf + ".txt",
+        # n_host=n_host,
+        # bw=args.bw + "G",
+        # time=args.simul_time,
+        # output=os.getcwd() + "/config/" + flow + ".txt"))
+
 
     # sanity check - bandwidth
     with open("config/{topo}.txt".format(topo=args.topo), 'r') as f_topo:

@@ -26,6 +26,7 @@ lb_modes = {
     3: "conga",
     6: "letflow",
     9: "conweave",
+    11: "proteus",
 }
 topo2bdp = {
     "leaf_spine_128_100G_OS2": 104000,  # 2-tier
@@ -162,7 +163,7 @@ def main():
     file_dir = getFilePath()
     fig_dir = file_dir + "/figures"
     output_dir = file_dir + "/../mix/output"
-    history_filename = file_dir + "/../mix/.history"
+    history_filename = file_dir + "/../mix/plot_history"
 
     # read history file
     map_key_to_id = dict()
@@ -203,7 +204,7 @@ def main():
         ax.yaxis.set_ticks_position('left')
         ax.xaxis.set_ticks_position('bottom')
         
-        lbmode_order = ["fecmp", "conga", "letflow", "conweave"]
+        lbmode_order = ["fecmp", "drill", "conga", "letflow", "conweave", "proteus"]
         for tgt_lbmode in lbmode_order:
             for vv in v:
                 config_id = vv[0]
