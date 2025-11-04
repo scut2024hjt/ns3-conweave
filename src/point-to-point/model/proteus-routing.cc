@@ -499,8 +499,8 @@ namespace ns3 {
 	}
 
 	std::vector<uint32_t> ProteusRouting::GetPathSet(uint32_t dstToRId, uint32_t nPath) {
-    std::vector<uint32_t> nonCongested_path, undetermined_path, congested_path;
-    std::vector<uint32_t> selected_path;
+		std::vector<uint32_t> nonCongested_path, undetermined_path, congested_path;
+		std::vector<uint32_t> selected_path;
 		uint32_t selectedCount = 0;
 		// static double maxlu=0;
 
@@ -523,8 +523,8 @@ namespace ns3 {
 		for (it = m_proteusPathInfoTable.find(dstToRId)->second.begin(); it != m_proteusPathInfoTable.find(dstToRId)->second.end(); it++) {
 			// false 表示路径为 inative
 			if (m_proteusPathStatus[dstToRId][it->first] == false) {
-            continue;
-        }
+				continue;
+			}
 
 			// 把路径全放入nonCongested集里 即只按rtt来选路 而非proteus的逻辑
 			// nonCongested_path.push_back(it->first);
@@ -537,10 +537,10 @@ namespace ns3 {
 			} else if(it->second.link_utilization < m_linkUtilThreshold) {
 				if (GetInterfacePause(it->first&0xFF)[3]) Settings::count_pfc[2]++;
 				undetermined_path.push_back(it->first);
-                } else {
+            } else {
 				if (GetInterfacePause(it->first&0xFF)[3]) Settings::count_pfc[3]++;
 				congested_path.push_back(it->first);
-                }
+            }
 #else
 			if (GetInterfacePause(it->first&0xFF)[3]) Settings::count_pfc[0]++;
 			if (it->second.oneway_rtt < m_onewayRttLow.GetNanoSeconds() && !GetInterfacePause(it->first&0xFF)[3]) {
@@ -549,7 +549,7 @@ namespace ns3 {
 			} else if(it->second.link_utilization < m_linkUtilThreshold || GetInterfacePause(it->first&0xFF)[3]) {
 				if (GetInterfacePause(it->first&0xFF)[3]) Settings::count_pfc[2]++;
 				undetermined_path.push_back(it->first);
-        } else {
+        	} else {
 				if (GetInterfacePause(it->first&0xFF)[3]) Settings::count_pfc[3]++;
 				congested_path.push_back(it->first);
 			}
@@ -593,14 +593,14 @@ namespace ns3 {
 			for (uint32_t i = 0; i < nonCongested_path.size(); i++) {
 				uint64_t cur_rtt = m_proteusPathInfoTable[dstToRId][nonCongested_path[i]].oneway_rtt;
 				// uint64_t cur_rtt = m_proteusPathInfoTable[dstToRId][nonCongested_path[i]].oneway_rtt + m_proteusRttIncTable[dstToRId][nonCongested_path[i]];
-            if (cur_rtt < min_rtt) {
-                min_rtt = cur_rtt;
+				if (cur_rtt < min_rtt) {
+					min_rtt = cur_rtt;
 
 					idx.clear();
 					idx.push_back(i);
-            } else if (cur_rtt == min_rtt) {
+            	} else if (cur_rtt == min_rtt) {
 					idx.push_back(i);
-            }
+            	}
 
 				// uint32_t delta = 250;
 				// if (cur_rtt+delta > min_rtt && min_rtt+delta > cur_rtt) {  // (min_rtt-500, min_rtt+500) min_rtt 一定范围内认为相等 比如500ns
@@ -630,11 +630,11 @@ namespace ns3 {
 
 			for (uint32_t i = 0; i < undetermined_path.size(); i++) {
 				double cur_util = m_proteusPathInfoTable[dstToRId][undetermined_path[i]].link_utilization;
-            if (cur_util > max_util) {
-                max_util = cur_util;
-                max_idx = i;
-            }
-        }
+				if (cur_util > max_util) {
+					max_util = cur_util;
+					max_idx = i;
+				}
+			}
         
 			selected_path.push_back(undetermined_path[max_idx]);
 			undetermined_path.erase(undetermined_path.begin() + max_idx);
@@ -664,49 +664,49 @@ namespace ns3 {
     return selected_path;
 }
 
-// 根据proteus重路由逻辑 选出可以走的路径
-uint32_t ProteusRouting::GetFinalPath(uint32_t dstToRId, std::vector<uint32_t> &pathSet, CustomHeader &ch) {
+	// 根据proteus重路由逻辑 选出可以走的路径
+	uint32_t ProteusRouting::GetFinalPath(uint32_t dstToRId, std::vector<uint32_t> &pathSet, CustomHeader &ch) {
 		// return pathSet[0];
 
 		// std::srand(Simulator::Now().GetInteger());
 		// return pathSet[rand() % pathSet.size()];
     
-    uint32_t selectedPath = pathSet[0];
+		uint32_t selectedPath = pathSet[0];
 
-    // 若只有一条路径 直接返回
-		if (pathSet.size() == 1) return pathSet[0];
+		// 若只有一条路径 直接返回
+			if (pathSet.size() == 1) return pathSet[0];
 
-    uint32_t i = 0;
-    for (i = 0; i < pathSet.size()-1; i++) {
-        uint32_t curPath = pathSet[i];
+		uint32_t i = 0;
+		for (i = 0; i < pathSet.size()-1; i++) {
+			uint32_t curPath = pathSet[i];
 			uint32_t curIf = curPath & 0xFF;  // pathSet[0]为第一跳 即当前交换机输出端口
 
-                bool* pauseStatus = GetInterfacePause(curIf);
+			bool* pauseStatus = GetInterfacePause(curIf);
 			// 没被PFC暂停 不用继续比较ttd和tqd
 			// if (!pauseStatus[ch.udp.pg]) {  // 可能没必要这么写吧(ch.udp.pg) 毕竟udp的优先级固定为3  非udp数据包也不会被proteus等负载均衡方法处理
 			// 	selectedPath = curPath;
 			// 	Settings::count_select[i]++;
 			// 	break;
 			// } else {  // 端口被暂停 执行proteus的重路由逻辑
-        uint64_t ttd, tqd;
+				uint64_t ttd, tqd;
 
 #if(1)
-        if (m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt > m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt) {
-            ttd = m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt - m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt;
-				// if (m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt+ m_proteusRttIncTable[dstToRId][pathSet[i+1]] > m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt+m_proteusRttIncTable[dstToRId][curPath]) {
+				if (m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt > m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt) {
+					ttd = m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt - m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt;
+					// if (m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt+ m_proteusRttIncTable[dstToRId][pathSet[i+1]] > m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt+m_proteusRttIncTable[dstToRId][curPath]) {
 					// ttd = m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt + m_proteusRttIncTable[dstToRId][pathSet[i+1]] - m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt-m_proteusRttIncTable[dstToRId][curPath];
 					tqd = GetInterfaceLoad(curIf) * 8 * 1e9 / m_outPort2BitRateMap[curIf];  // 乘1e9 转为纳秒单位
 
 					if (ttd >= tqd) { // 下一条路径带来的延迟 大于 在当前路径等待队列的延迟 因此 选择当前路径
 					// if (ttd >= tqd || // 以下或条件效果不佳
-					// m_proteusPathInfoTable[dstToRId][curPath].link_utilization < m_proteusPathInfoTable[dstToRId][pathSet[i+1]].link_utilization) {
-                selectedPath = curPath;
-                Settings::count_select[i]++;
+						// m_proteusPathInfoTable[dstToRId][curPath].link_utilization < m_proteusPathInfoTable[dstToRId][pathSet[i+1]].link_utilization) {
+						selectedPath = curPath;
+						Settings::count_select[i]++;
 						// 标记需要更新ttd  真正转发时更新。不对 leaf-spine下 后续没有重路由的可能性 没必要更新ttd 没用
-                return selectedPath;
-            } else {
-						// 设置当前路径inactive 直到resume
-                m_proteusPathStatus[dstToRId][curPath] = false;
+						return selectedPath;
+					} else {
+							// 设置当前路径inactive 直到resume
+						m_proteusPathStatus[dstToRId][curPath] = false;
 					}
 				} else {  // 若是次优路径的rtt更小 则在PFC暂停的情况下直接切换
 					// if (pauseStatus[ch.udp.pg])  // 暂停时才设为inactive。 性能较差
@@ -731,10 +731,10 @@ uint32_t ProteusRouting::GetFinalPath(uint32_t dstToRId, std::vector<uint32_t> &
 					std::cout << "select!	" << std::endl;
 					// 标记需要更新ttd  真正转发时更新。不对 leaf-spine下 后续没有重路由的可能性 没必要更新ttd 没用
 					break;
-        } else {
-					// 设置当前路径inactive 直到resume
-            m_proteusPathStatus[dstToRId][curPath] = false;
-        }
+				} else {
+							// 设置当前路径inactive 直到resume
+					m_proteusPathStatus[dstToRId][curPath] = false;
+				}
 #endif
 			// }
     }
