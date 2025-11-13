@@ -34,7 +34,7 @@ def extract_getbetter_numbers(filename):
     return numbers
 
 
-os.system("./tool_absolute_fct.py -id {id}".format(id=args.id))
+os.system("./tool_absolute_fct_fixed.py -id {id}".format(id=args.id))
 os.system("./tool_count_cnp.py -id {id}".format(id=args.id))
 os.system("./tool_count_ooo.py -id {id}".format(id=args.id))
 

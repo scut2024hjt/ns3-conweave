@@ -1,0 +1,129 @@
+#!/usr/bin/python3
+
+import numpy as np
+import subprocess
+import argparse
+import os
+import re
+
+def read_config_time(config_file):
+    """
+    从 config.txt 中读取 FLOWGEN_START_TIME 和 FLOWGEN_STOP_TIME
+    返回: (flowgen_start_time, flowgen_stop_time)
+    """
+    flowgen_start_time = None
+    flowgen_stop_time = None
+    
+    try:
+        with open(config_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('FLOWGEN_START_TIME'):
+                    # 提取时间值
+                    match = re.search(r'FLOWGEN_START_TIME\s+([\d.]+)', line)
+                    if match:
+                        flowgen_start_time = float(match.group(1))
+                elif line.startswith('FLOWGEN_STOP_TIME'):
+                    # 提取时间值
+                    match = re.search(r'FLOWGEN_STOP_TIME\s+([\d.]+)', line)
+                    if match:
+                        flowgen_stop_time = float(match.group(1))
+        
+        if flowgen_start_time is not None and flowgen_stop_time is not None:
+            return flowgen_start_time, flowgen_stop_time
+        else:
+            raise ValueError(f"无法从配置文件 {config_file} 中读取流生成时间")
+    except FileNotFoundError:
+        print(f"错误：配置文件 '{config_file}' 不存在")
+        return None, None
+    except Exception as e:
+        print(f"读取配置文件时发生错误: {str(e)}")
+        return None, None
+
+def calculate_total_avg_fct(input_file, time_limit_start, time_limit_end):
+    # 构建命令：从输入文件中提取 FCT 数据
+    cmd = f"cat {input_file} | awk '{{if ($6 > {time_limit_start} && $6 + $7 < {time_limit_end}) {{print $7/1000}}}}'"
+    
+    # 执行命令并获取输出
+    output = subprocess.check_output(cmd, shell=True)
+    
+    # 将输出转换为 FCT 列表（单位：微秒）
+    fct_list = [float(x) for x in output.decode("utf-8").split()]
+
+    # 计算所有流量的平均 FCT
+    if len(fct_list) > 0:
+        total_avg_fct = np.mean(fct_list)
+        return total_avg_fct
+    else:
+        return None  # 如果没有流量数据，返回 None
+
+def extract_absolute_fct(filename):    
+    try:
+        with open(filename, 'r') as file:
+            findout = False
+            results = {}
+            for line in file:
+                if "ABSOLUTE" in line:
+                    findout = True
+                    continue
+                
+                if findout:
+                    if "<1BDP" in line:
+                        line = line.strip()
+                        split_line = line.split(',')
+                        if len(split_line) >= 2:
+                            results['<1BDP'] = float(split_line[1])
+                        print(results['<1BDP'])
+                    elif ">1BDP" in line:
+                        line = line.strip()
+                        split_line = line.split(',')
+                        if len(split_line) >= 2:
+                            results['>1BDP'] = float(split_line[1])
+                        print(results['>1BDP'])
+
+
+    except FileNotFoundError:
+        print (f"错误：文件 '{filename}' 未找到")
+    except Exception as e:
+        print (f"读取文件时发生错误: {str (e)}")
+        return None
+
+# 主程序
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='计算所有流量的平均 FCT')
+    parser.add_argument('-id', '--id', dest='id', required=True, action='store', help="traceId")
+    parser.add_argument('-st', dest='simul_time', action='store',
+                        default='0.1', help="traffic time to simulate (up to 3 seconds) (default: 0.1)")
+    args = parser.parse_args()
+
+    # 从 config.txt 读取时间参数
+    config_file = f"./mix/output/{args.id}/config.txt"
+    flowgen_start_time, flowgen_stop_time = read_config_time(config_file)
+    
+    if flowgen_start_time is None or flowgen_stop_time is None:
+        print(f"失败：无法从 {config_file} 中读取时间参数")
+        exit(1)
+    
+    print(f"START={flowgen_start_time}s, STOP={flowgen_stop_time}s")
+
+    # 计算时间窗口（单位：纳秒）
+    fct_analysis_time_limit_begin = int(
+        flowgen_start_time * 1e9) + int(0.005 * 1e9)  # warmup
+    fct_analysistime_limit_end = int(
+        flowgen_stop_time * 1e9) + int(0.05 * 1e9)  # extra term
+
+    # 计算所有流量的平均 FCT
+    input_file = "./mix/output/" + args.id + "/" + args.id + "_out_fct.txt"
+    total_avg_fct = calculate_total_avg_fct(input_file, fct_analysis_time_limit_begin, fct_analysistime_limit_end)
+
+
+    # 获取长短流的afct
+    absolutefct_file = "./mix/output/" + args.id + "/" + args.id + "_out_fct_summary.txt"
+    extract_absolute_fct(absolutefct_file)
+
+    # 输出结果
+    if total_avg_fct is not None:
+        print(f"{total_avg_fct:.3f} μs")  # 所有flows的平均afct
+    else:
+        print("错误：计算平均FCT失败")
+

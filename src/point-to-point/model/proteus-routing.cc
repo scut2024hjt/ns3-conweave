@@ -155,8 +155,7 @@ namespace ns3 {
 				uint32_t selectedPath = *(std::next(pathSet.begin(), rand() % pathSet.size()));
 				std::vector<uint32_t> selectedPathSet;
 
-#if(0)  // per-flow
-				
+if(0) {  // per-flow				
 				uint64_t qpkey = ((uint64_t)ch.dip << 32) | ((uint64_t)ch.udp.sport << 16) | (uint64_t)ch.udp.pg | (uint64_t)ch.udp.dport;
 				// qpkey = (uint64_t)EcmpHash(ch, 12, m_switch_id);  // 没区别
 				if (m_proteusFlowTable.find(qpkey) != m_proteusFlowTable.end()) {
@@ -167,7 +166,8 @@ namespace ns3 {
 					
 					m_proteusFlowTable[qpkey] = selectedPath;
 				}
-#else  // per-packet
+}				
+else{
 				// per-packet
 				uint64_t qpkey = ((uint64_t)ch.dip << 32) | ((uint64_t)ch.udp.sport << 16) | (uint64_t)ch.udp.pg | (uint64_t)ch.udp.dport;
 				if (m_proteusFlowTable.find(qpkey) != m_proteusFlowTable.end()) {
@@ -176,18 +176,16 @@ namespace ns3 {
 
 					m_proteusFlowPackets[qpkey] += 1;
 
-#if(0)  // 添加重路由限制条件
+		  			// 添加重路由限制条件
 					// if (m_proteusRerouteRecord[qpkey] < 1) {  // 限制最大重路由次数
 					// if ((now.GetNanoSeconds()-m_proteusFlowLastSelectTime[qpkey]) > 200000) {  // 限制重路由间隔
-					if (m_proteusFlowPackets[qpkey] >= 15) {  // 传输一定数量的包后才能重路由
+					// if (m_proteusFlowPackets[qpkey] >= 15) {  // 传输一定数量的包后才能重路由
 					// if (m_proteusRerouteRecord[qpkey] < 1 && m_proteusFlowPackets[qpkey] >= 50) {
 					// if (now.GetNanoSeconds() - m_proteusFlowLastTxTime[qpkey] > 1000) {  // 发包间隔超过一定阈值才能重路由
 					// if (now.GetNanoSeconds() - m_proteusFlowLastTxTime[qpkey] > m_deltaBetterRtt) {  // 发包间隔和getbetter的Δ相等
 					// if (now.GetNanoSeconds() - m_proteusFlowLastTxTime[qpkey] > 200
-					// 	&& now.GetNanoSeconds()-m_proteusFlowLastSelectTime[qpkey] > 200000) {
-#else  // 不用额外的限制条件
-					{
-#endif
+					// 	&& now.GetNanoSeconds()-m_proteusFlowLastSelectTime[qpkey] > 200000) {					
+					if (1) {  // 不用额外的限制条件
 						// 若是有更好的路径
 						if (getBetterPath(now.GetNanoSeconds(), m_proteusFlowLastTxTime[qpkey], dstToRId, betterPath)) {  // betterPath接收返回值
 						// if (getBetterPath_Temp(now.GetNanoSeconds(), m_proteusFlowLastTxTime[qpkey], dstToRId, betterPath)) {
@@ -223,7 +221,7 @@ namespace ns3 {
 				}
 				m_proteusFlowTable[qpkey] = selectedPath;
 
-#if(1)  // 随着发包动态降低路径“优先级”									
+if(1){  // 随着发包动态降低路径“优先级”									
 				switch (1)
 				{
 				case 1:  // 每包固定增加rtt
@@ -294,7 +292,7 @@ namespace ns3 {
 				default:
 					break;
 				}
-#endif
+}
 				if (m_proteusFlowLastTxTime[qpkey] != 0)
 					if (now.GetNanoSeconds() > m_proteusFlowLastTxTime[qpkey]) {
 						#if(proteus_switch_fprintf)
@@ -308,7 +306,7 @@ namespace ns3 {
 						#endif
 					}
 				m_proteusFlowLastTxTime[qpkey] = now.GetNanoSeconds();
-#endif
+}
 // m_proteusPathInfoTable[dstToRId][selectedPath].oneway_rtt += proteus_perpacketdelay;
 				proteusTag.SetPathId(selectedPath);
 				proteusTag.SetHopCount(0);
