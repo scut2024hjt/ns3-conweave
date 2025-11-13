@@ -1596,6 +1596,7 @@ int main(int argc, char *argv[]) {
                                     swSrc->m_mmu->m_proteusRouting.m_proteusPathInfoTable[swDstId][pathId] = initPathInfo;
                                     swSrc->m_mmu->m_proteusRouting.m_proteusOriPathInfoTable[swDstId][pathId] = initPathInfo;
                                     swSrc->m_mmu->m_proteusRouting.m_proteusPathStatus[swDstId][pathId] = true;
+                                    swSrc->m_mmu->m_proteusRouting.m_proteusConFlowTable[swDstId][pathId] = 0;
                                 }
                                 continue;
                             }
@@ -1636,6 +1637,7 @@ int main(int argc, char *argv[]) {
                                         swSrc->m_mmu->m_proteusRouting.m_proteusPathInfoTable[swDstId][pathId] = initPathInfo;
                                         swSrc->m_mmu->m_proteusRouting.m_proteusOriPathInfoTable[swDstId][pathId] = initPathInfo;
                                         swSrc->m_mmu->m_proteusRouting.m_proteusPathStatus[swDstId][pathId] = true;
+                                        swSrc->m_mmu->m_proteusRouting.m_proteusConFlowTable[swDstId][pathId] = 0;
                                     }
                                     continue;
                                 }
@@ -1680,6 +1682,7 @@ int main(int argc, char *argv[]) {
                                             swSrc->m_mmu->m_proteusRouting.m_proteusPathInfoTable[swDstId][pathId] = initPathInfo;
                                             swSrc->m_mmu->m_proteusRouting.m_proteusOriPathInfoTable[swDstId][pathId] = initPathInfo;
                                             swSrc->m_mmu->m_proteusRouting.m_proteusPathStatus[swDstId][pathId] = true;
+                                            swSrc->m_mmu->m_proteusRouting.m_proteusConFlowTable[swDstId][pathId] = 0;
                                         }
                                         continue;
                                     } else {
