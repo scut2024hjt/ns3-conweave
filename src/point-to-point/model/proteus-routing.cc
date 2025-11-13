@@ -8,6 +8,7 @@
 #include "ns3/ppp-header.h"
 #include "ns3/ipv4-header.h"
 #include "ns3/random-variable.h"
+#include "flow-stat-tag.h"
 
 
 NS_LOG_COMPONENT_DEFINE("ProteusRouing");
@@ -27,6 +28,8 @@ namespace ns3 {
 		ftxdiff = fopen("mix/debug/ftxdiff.txt", "a+");
 		// 每次的路径初选						src->dst:pathid pathrtt
 		fpathselect = fopen("mix/debug/fpathselect.txt", "a+");
+		// 每次选路的并发流统计
+		fconflow = fopen("mix/debug/fconflow.txt", "a+");
 	
 		// set constants
 		m_dreTime = Time(MicroSeconds(200));
@@ -64,6 +67,9 @@ namespace ns3 {
 		FlowIdTag inportTag;
 		p->PeekPacketTag(inportTag);
 		uint32_t inport = inportTag.GetFlowId();
+
+		FlowStatTag fst;
+		bool foundFlowStatTag = p->PeekPacketTag(fst);
 
 		/*************  一些必做的处理  *************/
 		uint32_t srcToRId = Settings::hostIp2SwitchId[ch.sip];
@@ -146,7 +152,7 @@ namespace ns3 {
 					}
 				}
 
-				updatePathStatus(dstToRId);
+				updatePathStatus(dstToRId);				
 
 				std::set<uint32_t> pathSet = m_proteusRoutingTable[dstToRId];
 				
@@ -155,7 +161,7 @@ namespace ns3 {
 				uint32_t selectedPath = *(std::next(pathSet.begin(), rand() % pathSet.size()));
 				std::vector<uint32_t> selectedPathSet;
 
-#if(0)  // per-flow
+#if(1)  // per-flow
 				
 				uint64_t qpkey = ((uint64_t)ch.dip << 32) | ((uint64_t)ch.udp.sport << 16) | (uint64_t)ch.udp.pg | (uint64_t)ch.udp.dport;
 				// qpkey = (uint64_t)EcmpHash(ch, 12, m_switch_id);  // 没区别
@@ -167,6 +173,7 @@ namespace ns3 {
 					
 					m_proteusFlowTable[qpkey] = selectedPath;
 				}
+				m_proteusPathInfoTable[dstToRId][selectedPath].oneway_rtt += proteus_perpacketdelay;
 #else  // per-packet
 				// per-packet
 				uint64_t qpkey = ((uint64_t)ch.dip << 32) | ((uint64_t)ch.udp.sport << 16) | (uint64_t)ch.udp.pg | (uint64_t)ch.udp.dport;
@@ -203,7 +210,7 @@ namespace ns3 {
 					}
 				} else {  // 新flow
 					selectedPathSet = GetPathSet(dstToRId, m_nsample);
-					selectedPath = GetFinalPath(dstToRId, selectedPathSet, ch);
+					selectedPath = GetFinalPath(dstToRId, selectedPathSet, ch);						
 					// auto rtt1297 = m_proteusPathInfoTable[132][1297].oneway_rtt;
 					// auto rtt1298 = m_proteusPathInfoTable[132][1298].oneway_rtt;
 					// auto rtt1299 = m_proteusPathInfoTable[132][1299].oneway_rtt;
@@ -221,7 +228,7 @@ namespace ns3 {
 					m_proteusFlowPackets[qpkey] = 1;
 					m_proteusRttIncTable[dstToRId][selectedPath] = 0;
 				}
-				m_proteusFlowTable[qpkey] = selectedPath;
+				m_proteusFlowTable[qpkey] = selectedPath;				
 
 #if(1)  // 随着发包动态降低路径“优先级”									
 				switch (1)
@@ -309,7 +316,35 @@ namespace ns3 {
 					}
 				m_proteusFlowLastTxTime[qpkey] = now.GetNanoSeconds();
 #endif
-// m_proteusPathInfoTable[dstToRId][selectedPath].oneway_rtt += proteus_perpacketdelay;
+
+				// 记录选路时 并发流情况 用以比较选路和并发流数目关系
+				uint32_t firstpath = *(m_proteusRoutingTable[dstToRId].begin());
+				fprintf(fconflow, "%u:%u(%u,%u,%u,%u,%u,%u,%u,%u)\n", selectedPath, m_proteusConFlowTable[dstToRId][selectedPath],
+					m_proteusConFlowTable[dstToRId][firstpath],
+					m_proteusConFlowTable[dstToRId][firstpath+1],
+					m_proteusConFlowTable[dstToRId][firstpath+2],
+					m_proteusConFlowTable[dstToRId][firstpath+3],
+					m_proteusConFlowTable[dstToRId][firstpath+4],
+					m_proteusConFlowTable[dstToRId][firstpath+5],
+					m_proteusConFlowTable[dstToRId][firstpath+6],
+					m_proteusConFlowTable[dstToRId][firstpath+7]);
+				// 统计并发流（在选路后进行 以便分析并发流数和选路的关系）
+				if (foundFlowStatTag) {
+					uint8_t flowstat = fst.GetType();
+					switch (flowstat)
+					{
+					case FlowStatTag::FLOW_START:
+						m_proteusConFlowTable[dstToRId][selectedPath] += 1;
+						break;
+					case FlowStatTag::FLOW_END:
+						if (m_proteusConFlowTable[dstToRId][selectedPath] > 0)
+							m_proteusConFlowTable[dstToRId][selectedPath] -= 1;
+						break;
+					default:
+						break;
+					}					
+				}
+
 				proteusTag.SetPathId(selectedPath);
 				proteusTag.SetHopCount(0);
 
@@ -537,10 +572,10 @@ namespace ns3 {
 			} else if(it->second.link_utilization < m_linkUtilThreshold) {
 				if (GetInterfacePause(it->first&0xFF)[3]) Settings::count_pfc[2]++;
 				undetermined_path.push_back(it->first);
-            } else {
+			} else {
 				if (GetInterfacePause(it->first&0xFF)[3]) Settings::count_pfc[3]++;
 				congested_path.push_back(it->first);
-            }
+			}
 #else
 			if (GetInterfacePause(it->first&0xFF)[3]) Settings::count_pfc[0]++;
 			if (it->second.oneway_rtt < m_onewayRttLow.GetNanoSeconds() && !GetInterfacePause(it->first&0xFF)[3]) {
@@ -549,7 +584,7 @@ namespace ns3 {
 			} else if(it->second.link_utilization < m_linkUtilThreshold || GetInterfacePause(it->first&0xFF)[3]) {
 				if (GetInterfacePause(it->first&0xFF)[3]) Settings::count_pfc[2]++;
 				undetermined_path.push_back(it->first);
-        	} else {
+			} else {
 				if (GetInterfacePause(it->first&0xFF)[3]) Settings::count_pfc[3]++;
 				congested_path.push_back(it->first);
 			}
@@ -589,7 +624,7 @@ namespace ns3 {
 			idx.push_back(0);
 
 			if(selectedCount >= nPath) break;
-        
+
 			for (uint32_t i = 0; i < nonCongested_path.size(); i++) {
 				uint64_t cur_rtt = m_proteusPathInfoTable[dstToRId][nonCongested_path[i]].oneway_rtt;
 				// uint64_t cur_rtt = m_proteusPathInfoTable[dstToRId][nonCongested_path[i]].oneway_rtt + m_proteusRttIncTable[dstToRId][nonCongested_path[i]];
@@ -598,9 +633,9 @@ namespace ns3 {
 
 					idx.clear();
 					idx.push_back(i);
-            	} else if (cur_rtt == min_rtt) {
+				} else if (cur_rtt == min_rtt) {
 					idx.push_back(i);
-            	}
+				}
 
 				// uint32_t delta = 250;
 				// if (cur_rtt+delta > min_rtt && min_rtt+delta > cur_rtt) {  // (min_rtt-500, min_rtt+500) min_rtt 一定范围内认为相等 比如500ns
@@ -635,7 +670,7 @@ namespace ns3 {
 					max_idx = i;
 				}
 			}
-        
+
 			selected_path.push_back(undetermined_path[max_idx]);
 			undetermined_path.erase(undetermined_path.begin() + max_idx);
 			selectedCount++;						
@@ -660,9 +695,9 @@ namespace ns3 {
 			congested_path.erase(congested_path.begin() + min_idx);
 			selectedCount++;
 		}
-
-    return selected_path;
-}
+		
+		return selected_path;
+	}
 
 	// 根据proteus重路由逻辑 选出可以走的路径
 	uint32_t ProteusRouting::GetFinalPath(uint32_t dstToRId, std::vector<uint32_t> &pathSet, CustomHeader &ch) {
@@ -670,11 +705,11 @@ namespace ns3 {
 
 		// std::srand(Simulator::Now().GetInteger());
 		// return pathSet[rand() % pathSet.size()];
-    
+
 		uint32_t selectedPath = pathSet[0];
 
 		// 若只有一条路径 直接返回
-			if (pathSet.size() == 1) return pathSet[0];
+		if (pathSet.size() == 1) return pathSet[0];
 
 		uint32_t i = 0;
 		for (i = 0; i < pathSet.size()-1; i++) {
@@ -692,20 +727,20 @@ namespace ns3 {
 
 #if(1)
 				if (m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt > m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt) {
-					ttd = m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt - m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt;
-					// if (m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt+ m_proteusRttIncTable[dstToRId][pathSet[i+1]] > m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt+m_proteusRttIncTable[dstToRId][curPath]) {
+					ttd = m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt - m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt;					
+				// if (m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt+ m_proteusRttIncTable[dstToRId][pathSet[i+1]] > m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt+m_proteusRttIncTable[dstToRId][curPath]) {
 					// ttd = m_proteusPathInfoTable[dstToRId][pathSet[i+1]].oneway_rtt + m_proteusRttIncTable[dstToRId][pathSet[i+1]] - m_proteusPathInfoTable[dstToRId][curPath].oneway_rtt-m_proteusRttIncTable[dstToRId][curPath];
 					tqd = GetInterfaceLoad(curIf) * 8 * 1e9 / m_outPort2BitRateMap[curIf];  // 乘1e9 转为纳秒单位
 
 					if (ttd >= tqd) { // 下一条路径带来的延迟 大于 在当前路径等待队列的延迟 因此 选择当前路径
 					// if (ttd >= tqd || // 以下或条件效果不佳
-						// m_proteusPathInfoTable[dstToRId][curPath].link_utilization < m_proteusPathInfoTable[dstToRId][pathSet[i+1]].link_utilization) {
+					// m_proteusPathInfoTable[dstToRId][curPath].link_utilization < m_proteusPathInfoTable[dstToRId][pathSet[i+1]].link_utilization) {
 						selectedPath = curPath;
 						Settings::count_select[i]++;
 						// 标记需要更新ttd  真正转发时更新。不对 leaf-spine下 后续没有重路由的可能性 没必要更新ttd 没用
 						return selectedPath;
 					} else {
-							// 设置当前路径inactive 直到resume
+						// 设置当前路径inactive 直到resume
 						m_proteusPathStatus[dstToRId][curPath] = false;
 					}
 				} else {  // 若是次优路径的rtt更小 则在PFC暂停的情况下直接切换
@@ -732,23 +767,23 @@ namespace ns3 {
 					// 标记需要更新ttd  真正转发时更新。不对 leaf-spine下 后续没有重路由的可能性 没必要更新ttd 没用
 					break;
 				} else {
-							// 设置当前路径inactive 直到resume
+					// 设置当前路径inactive 直到resume
 					m_proteusPathStatus[dstToRId][curPath] = false;
 				}
 #endif
 			// }
-    }
+		}
 
 		if (i == pathSet.size()-1) {  // 剩最后一条 返回最后一条路径
-        Settings::count_select[i]++;
-        return pathSet[i];
+			Settings::count_select[i]++;
+			return pathSet[i];
 			
 			// std::srand(Simulator::Now().GetInteger());
 			// return pathSet[rand() % pathSet.size()];
-    } else {
-        return selectedPath;
-    }
-}
+		} else {
+			return selectedPath;
+		}
+	}
 
 	uint32_t ProteusRouting::GetFinalPath_Temp(uint32_t dstToRId, std::vector<uint32_t> &pathSet, CustomHeader &ch) {
 		uint32_t selectedPath = pathSet[0];

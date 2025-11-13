@@ -79,6 +79,9 @@ class ProteusRouting: public Object {
         std::map<uint32_t, std::map<uint32_t, uint64_t>> m_proteusPathInfoStore;
         std::map<uint32_t, std::map<uint32_t, bool>>m_proteusPathStatus;
 
+        // 统计并发流（和每包rtt增加方法进行比较 故表类似PathInfoTable 即 <ToRId, pathId>:并发流数）
+        std::map<uint32_t, std::map<uint32_t, uint32_t>> m_proteusConFlowTable;
+
         std::vector<uint32_t> GetPathSet(uint32_t dstToRId, uint32_t nPath);
         uint32_t GetFinalPath(uint32_t dstToRId, std::vector<uint32_t> &pathSet, CustomHeader &ch);
         uint32_t GetFinalPath_Temp(uint32_t dstToRId, std::vector<uint32_t> &pathSet, CustomHeader &ch);
@@ -110,7 +113,7 @@ class ProteusRouting: public Object {
     private:
         bool m_isToR;
         uint32_t m_switch_id;
-        FILE *ftxgap, *fupdategap, *ftxdiff, *fallupdategap, *fpathselect, *fpathrtt;
+        FILE *ftxgap, *fupdategap, *ftxdiff, *fallupdategap, *fpathselect, *fpathrtt, *fconflow;
 
         // callback
         SwitchSendCallback m_switchSendCallback;  // bound to SwitchNode::SwitchSend
